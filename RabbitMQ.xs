@@ -2,12 +2,11 @@
 #include "perl.h"
 #include "XSUB.h"
 
-#include "amqp.h"
-#include "amqp_tcp_socket.h"
-#include "amqp_ssl_socket.h"
+#include <amqp.h>
+#include <amqp_tcp_socket.h>
+#include <amqp_ssl_socket.h>
 /* For struct timeval */
-#include "amqp_time.h"
-#include "amqp_private.h"
+#include <sys/time.h>
 
 /* This is for the Math::UInt64 integration */
 #include "perl_math_int64.h"
@@ -57,7 +56,7 @@ SV*  mq_table_to_hashref(amqp_table_t *table);
 void die_on_error(pTHX_ int x, amqp_connection_state_t conn, char const *context) {
   /* Handle socket errors */
   if ( x == AMQP_STATUS_CONNECTION_CLOSED || x == AMQP_STATUS_SOCKET_ERROR ) {
-      amqp_socket_close( amqp_get_socket( conn ) );
+      /* Non-public API: amqp_socket_close( amqp_get_socket( conn ) ); */
       Perl_croak(aTHX_ "%s failed because AMQP socket connection was closed.", context);
   }
   /* Handle everything else */
@@ -83,7 +82,7 @@ void die_on_amqp_error(pTHX_ amqp_rpc_reply_t x, amqp_connection_state_t conn, c
         ||
         x.library_error == AMQP_STATUS_SOCKET_ERROR
       ) {
-        amqp_socket_close( amqp_get_socket( conn ) );
+        /* Non-public API: amqp_socket_close( amqp_get_socket( conn ) ); */
         Perl_croak(aTHX_ "%s: failed since AMQP socket connection closed.\n", context);
       }
       /* Otherwise, give a more generic croak. */
@@ -1384,7 +1383,7 @@ net_amqp_rabbitmq_recv(conn, timeout = 0)
     /* We want to detect whether we were disconnected by the remote host during the internal_recv(). */
     status = internal_recv(message, conn, 0, timeout);
     if ( status == AMQP_STATUS_CONNECTION_CLOSED || status == AMQP_STATUS_SOCKET_ERROR ) {
-        amqp_socket_close( amqp_get_socket( conn ) );
+        /* Non-public API: amqp_socket_close( amqp_get_socket( conn ) ); */
         Perl_croak(aTHX_ "AMQP socket connection was closed.");
     } else if ((timeout > 0 || timeout == -1) && status != 0) {
         SvREFCNT_dec(message);
@@ -1563,7 +1562,7 @@ net_amqp_rabbitmq__publish(conn, channel, routing_key, body, options = NULL, pro
 
     /* If the connection failed, blast the file descriptor! */
     if ( rv == AMQP_STATUS_CONNECTION_CLOSED || rv == AMQP_STATUS_SOCKET_ERROR ) {
-        amqp_socket_close( amqp_get_socket( conn ) );
+        /* Non-public API: amqp_socket_close( amqp_get_socket( conn ) ); */
         Perl_croak(aTHX_ "Publish failed because AMQP socket connection was closed.");
     }
 
@@ -1602,7 +1601,7 @@ net_amqp_rabbitmq_get(conn, channel, queuename, options = NULL)
         int rv;
         rv = internal_recv(hv, conn, 1, 0);
         if ( rv == AMQP_STATUS_CONNECTION_CLOSED || rv == AMQP_STATUS_SOCKET_ERROR ) {
-          amqp_socket_close( amqp_get_socket( conn ) );
+          /* Non-public API: amqp_socket_close( amqp_get_socket( conn ) ); */
           Perl_croak(aTHX_ "Failed to get(), AMQP socket connection was closed.");
         }
         else if(rv != AMQP_STATUS_OK) {
@@ -1670,9 +1669,9 @@ net_amqp_rabbitmq_disconnect(conn)
   PREINIT:
     int sockfd;
   CODE:
-    if ( conn->socket != NULL ) {
+    if ( amqp_get_socket(conn) != NULL ) {
         amqp_connection_close(conn, AMQP_REPLY_SUCCESS);
-        amqp_socket_close( amqp_get_socket( conn ) );
+        /* Non-public API: amqp_socket_close( amqp_get_socket( conn ) ); */
     }
 
 Net::AMQP::RabbitMQ
@@ -1687,7 +1686,7 @@ void
 net_amqp_rabbitmq_DESTROY(conn)
   Net::AMQP::RabbitMQ conn
   CODE:
-    if ( conn->socket != NULL ) {
+    if ( amqp_get_socket(conn) != NULL ) {
         amqp_connection_close(conn, AMQP_REPLY_SUCCESS);
     }
     empty_amqp_pool( &temp_memory_pool );
@@ -1718,10 +1717,12 @@ net_amqp_rabbitmq_tx_commit(conn, channel, args = NULL)
   int channel
   HV *args
   PREINIT:
-    amqp_pool_t *channel_pool;
+    /* Non-public API: amqp_pool_t *channel_pool;*/
   CODE:
     amqp_tx_commit(conn, channel);
+    /* Non-public API:
     channel_pool = amqp_get_or_create_channel_pool(conn, channel);
+    */
     maybe_recycle_memory( conn );
 
     die_on_amqp_error(aTHX_ amqp_get_rpc_reply(conn), conn, "Commiting transaction");

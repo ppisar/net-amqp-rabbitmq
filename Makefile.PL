@@ -6,51 +6,14 @@ use utf8;
 use lib qw(inc);
 use ExtUtils::MakeMaker 5.16 ;
 use Config;
-use Devel::CheckLib;
-
-# This will help make the library compile on OSX
-# (and hopefully Solaris as well, but I don't have one of those)
-my $has_htonll = check_lib(
-    'function' => '
-#ifdef htonll
-return 0;
-#else
-return -1;
-#endif
-',
-    'header'   => ['arpa/inet.h','stdio.h'],
-    'lib' => 'c',
-);
 
 #XXX i wonder if we should check for socket and poll...
 my @defines = ('-DHAVE_SOCKET', '-DHAVE_POLL', qq/-DAMQ_PLATFORM='"Perl_$^O_$^V"'/);
-push @defines, '-DHAVE_HTONLL' if $has_htonll;
 
-my @libs = ('-lrt');
-my @inc = ('-I.', '-Irabbitmq-include');
+my $has_openssl = `pkg-config --static --libs librabbitmq` =~ 'ssl';
 
-my $has_openssl = check_lib(
-    lib => [qw/ssl crypto/],
-);
 if ( $has_openssl ) {
     push @defines, '-DNAR_HAVE_OPENSSL';
-    push @libs, '-lssl', '-lcrypto';
-    if ( $^O eq 'MSWin32' ) {
-        push @inc, "-Irabbitmq-include/win32";
-    }
-    else {
-        push @inc, "-Irabbitmq-include/unix";
-    }
-}
-
-my $ofiles = '';
-foreach ( <*.c> ){
-    next if ( $_ =~ m/assertlib/ );
-    next if ( ( $_ eq 'amqp_openssl.c' ) && !$has_openssl );
-    next if ( ( $_ eq 'threads.c' ) && ( $^O ne 'MSWin32' ) );
-
-    $_ =~ s/.c$/.o/;
-    $ofiles .= "$_ ";
 }
 
 my %WriteMakefileArgs = (
@@ -59,11 +22,10 @@ my %WriteMakefileArgs = (
     LICENSE         => 'mozilla_1_1',
     ABSTRACT_FROM   => 'RabbitMQ.pm',
     AUTHOR          => 'Mark Ellis <markellis@cpan.org>, Michael Stemle, Jr. <mstemle@cpan.org>',
-    OBJECT          => "RabbitMQ.o ${ofiles}",
+    OBJECT          => "RabbitMQ.o perl_math_int64.o",
     OPTIMIZE        => $ENV{'OPTIMIZE'},
     DEFINE          => join( ' ', @defines ),
-    LIBS            => join( ' ', @libs ),
-    INC             => join( ' ', @inc ),
+    LIBS            => `pkg-config --libs librabbitmq`,
     PREREQ_PM       => {
         'Math::Int64'      => '0.34',
         'Scalar::Util'     => '0',

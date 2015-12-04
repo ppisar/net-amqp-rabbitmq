@@ -478,10 +478,7 @@ the server may snip the connection.
 =head2 Fatal Errors
 
 It should be noted that almost all errors in this library are considered fatal,
-insomuch as they trigger a C<croak()>. In these errors, if it appears that somehow
-the connection has been closed by the remote host, or otherwise invalidated,
-the socket will also be closed and should be re-opened before any additional
-calls are made.
+insomuch as they trigger a C<croak()>.
 
 =head1 AUTHORS
 
